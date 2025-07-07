@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Greeks Hedger</title>
+  <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js"></script>
+  <style>
+    body{font-family:system-ui;margin:2rem}
+    table,th,td{border:1px solid #999;border-collapse:collapse;padding:0.3rem}
+    th{background:#f2f2f2}
+  </style>
+</head>
+<body>
+<h2>Upload Portfolio → Solve Hedge</h2>
+<form hx-post="/solve" hx-target="#results" hx-encoding="multipart/form-data">
+  <input type="file" name="file" accept=".json,.csv" required>
+  ∣ Δ limit <input type="number" step="any" name="delta_limit" value="5000">
+  ∣ Γ limit <input type="number" step="any" name="gamma_limit" value="100">
+  ∣ ν limit <input type="number" step="any" name="vega_limit"  value="2000">
+  <button type="submit">Solve</button>
+</form>
+
+<div id="results" hx-swap="outerHTML">
+  {% if response %}
+    <h3>Trades</h3>
+    <table>
+      <tr><th>Symbol</th><th>Contract</th><th>Qty</th></tr>
+      {% for t in response['trades'] %}
+        {% set c=t['contract'] %}
+        <tr>
+          <td>{{t['symbol']}}</td>
+          <td>{{ c['type']=='option'
+                and (c['cp'] ~ c['strike'] ~ '@' ~ c['expiry'][:10])
+                or  c['type'] }}</td>
+          <td>{{t['qty']}}</td>
+        </tr>
+      {% endfor %}
+    </table>
+
+    <h3>Greeks</h3>
+    <div id="greeks"></div>
+    <script>
+      const data={{json|safe}};
+      const keys=Object.keys(data.pre_risk);
+      Plotly.newPlot("greeks",[
+        {x:keys,y:keys.map(k=>data.pre_risk[k]),name:"Pre",type:"bar"},
+        {x:keys,y:keys.map(k=>data.post_risk[k]),name:"Post",type:"bar"}
+      ],{barmode:"group"});
+    </script>
+
+    {% if not response['residual_exposure_ok'] %}
+      <h3 style="color:red">Violations</h3>
+      <pre>{{response['violations']}}</pre>
+    {% endif %}
+  {% endif %}
+</div>
+</body>
+</html>
